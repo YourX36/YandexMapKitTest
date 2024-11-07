@@ -1,6 +1,8 @@
 package com.example.testyandexmapkit
 
 import com.example.testyandexmapkit.model.LatLng
+import com.yandex.mapkit.RequestPoint
+import com.yandex.mapkit.RequestPointType
 import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.location.Location
 
@@ -28,4 +30,10 @@ fun LatLng.mapToYandexPoint() : Point {
         latitude,
         longitude
     )
+}
+
+fun List<LatLng>.invoke() : List<RequestPoint> {
+    return this.map { point ->
+        RequestPoint(point.mapToYandexPoint(), RequestPointType.WAYPOINT, null, null)
+    }
 }

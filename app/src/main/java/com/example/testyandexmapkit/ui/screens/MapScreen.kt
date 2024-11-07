@@ -24,10 +24,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.testyandexmapkit.R
+import com.example.testyandexmapkit.invoke
 import com.example.testyandexmapkit.mapToYandexPoint
 import com.example.testyandexmapkit.model.LatLng
 import com.example.testyandexmapkit.services.routemanagers.PedestrianRouteManager
@@ -37,12 +41,18 @@ import com.example.testyandexmapkit.utils.LocationViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.directions.DirectionsFactory
 import com.yandex.mapkit.directions.driving.DrivingRouterType
 import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.map.MapObjectCollection
 import com.yandex.mapkit.mapview.MapView
 import com.yandex.mapkit.transport.TransportFactory
+import com.yandex.mapkit.transport.masstransit.Route
+import com.yandex.mapkit.transport.masstransit.RouteOptions
+import com.yandex.mapkit.transport.masstransit.Session
+import com.yandex.mapkit.transport.masstransit.TimeOptions
+import com.yandex.runtime.Error
 import com.yandex.runtime.image.ImageProvider
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -50,6 +60,7 @@ import org.koin.androidx.compose.koinViewModel
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MapScreen(
+    mapView: MapView
 ) {
 
     val locationPermissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -65,14 +76,8 @@ fun MapScreen(
         Log.e("PEDESTRIAN", "Инициализация PedestrianRouter: $router")
         router
     }
-    val pedestrianManager = remember {
-        PedestrianRouteManager(pedestrianRouter)
-    }
 
     val locationViewState by locationViewModel.viewState.collectAsState()
-
-    var mapView by remember { mutableStateOf<MapView?>(null) }
-
 
     val routePoints: List<LatLng> by remember {
         derivedStateOf { locationViewState.routePoints }
@@ -85,21 +90,32 @@ fun MapScreen(
     var userLocationLayer by remember { mutableStateOf<MapObjectCollection?>(null) }
     var routeLayer by remember { mutableStateOf<MapObjectCollection?>(null) }
 
+    val listener = object : Session.RouteListener {
+        override fun onMasstransitRoutes(routes: MutableList<Route>) {
+            if (routes.isNotEmpty()) {
+                routeLayer?.clear()
+                routes.forEach {
+                    routeLayer?.addPolyline(it.geometry)
+                }
+            }
+        }
+        override fun onMasstransitRoutesError(p0: Error) {
+            Log.e("MapScreen", "Ошибка построения маршрута: ${p0}")
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
     ) {
         AndroidView(factory = { context ->
-            MapView(context).apply {
-                mapView = this
+            mapView.apply {
                 mapWindow.map.isNightModeEnabled = true
 
                 userLocationLayer = this.mapWindow.map.mapObjects.addCollection()
                 routeLayer = this.mapWindow.map.mapObjects.addCollection()
             }
         }, update = { map ->
-            mapView = map
             userLocation?.let { location ->
                 if (userLocationLayer != null) {
                     updateLocation(
@@ -146,23 +162,13 @@ fun MapScreen(
             }
 
             if (points.isNotEmpty()) {
-/*                pedestrianManager.buildPedestrianRoute(
-                    points,
-                    onSuccess = { routes ->
-                        if (routes.isNotEmpty()) {
-                            // Очищаем предыдущие маршруты
-                            routeLayer?.clear()
-                            // Добавляем новый маршрут
-                            routes.forEach {
-                                routeLayer?.addPolyline(it.geometry)
-                            }
-                        }
-                        Log.e("PEDESTRIAN", "ПОЛУЧЕННЫЕ ТОЧКИ $routes")
-                    }
-                ) {
-                    Log.e("MapScreen", "Ошибка построения маршрута")
-                }*/
-                routeManager.buildRoute(
+                pedestrianRouter.requestRoutes(
+                    routePoints.invoke(),
+                    TimeOptions(),
+                    RouteOptions(),
+                    listener
+                )
+/*                routeManager.buildRoute(
                     points = points,
                     onSuccess = { routes ->
                         if (routes.isNotEmpty()) {
@@ -175,7 +181,7 @@ fun MapScreen(
                     onError = { error ->
                         Log.e("MapScreen", "Ошибка построения маршрута: ${error}")
                     }
-                )
+                )*/
             } else {
                 routeLayer?.clear()
             }

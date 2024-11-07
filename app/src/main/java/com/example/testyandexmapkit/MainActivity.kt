@@ -16,20 +16,27 @@ import com.example.testyandexmapkit.services.LocationService
 import com.example.testyandexmapkit.ui.screens.MapScreen
 import com.example.testyandexmapkit.ui.theme.TestYandexMapKitTheme
 import com.yandex.mapkit.MapKitFactory
+import com.yandex.mapkit.mapview.MapView
 import org.koin.androidx.compose.getViewModel
 import org.koin.androidx.compose.koinViewModel
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var locationServiceIntent: Intent
+    private lateinit var mapView: MapView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         locationServiceIntent = Intent(this, LocationService::class.java)
         startService(locationServiceIntent)
+        mapView = MapView(this).apply {
+            mapWindow.map.isNightModeEnabled = true
+        }
         setContent {
             TestYandexMapKitTheme {
-                MapScreen()
+                MapScreen(
+                    mapView
+                )
             }
         }
     }
@@ -37,9 +44,11 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         MapKitFactory.getInstance().onStart()
+        mapView.onStart()
     }
 
     override fun onStop() {
+        mapView.onStop()
         MapKitFactory.getInstance().onStop()
         super.onStop()
     }
